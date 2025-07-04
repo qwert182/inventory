@@ -1,0 +1,4 @@
+*.sw[a-z]
+*.log
+__pycache__
+.pytest_cache

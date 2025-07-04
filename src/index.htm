@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<title>Inventory</title>
+<script type="text/javascript">
+  "use strict";
+  function log(text, style) {
+    if (typeof log.content === "undefined")
+      log.content = "";
+    var text = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    if (style)
+      text = '<span style="' + style + '">' + text + '</span>';
+    log.content += text + "\n";
+    var logBar = document.getElementById("logBar");
+    if (logBar)
+      logBar.outerHTML = '<pre id="logBar">' + log.content + '</pre>';
+  }
+
+  function init() {
+    log("init()", init.done ? "color:gray;" : "");
+    if (init.done)
+      return;
+    init.done = true;
+    var dbConnectOpts = window.localStorage ? window.localStorage.getItem("db-connect") : null;
+    if (dbConnectOpts) {
+      dbConnectOpts = JSON.parse(dbConnectOpts);
+      log("init: dbConnectOpts = '" + dbConnectOpts + "'", "color:red;");
+      gh.init(dbConnectOpts);
+      modules.load();
+    } else {
+      modules.load("dbConnect");
+    }
+  }
+
+  var modules = {
+    load: function (newModule) {
+      var hash = window.location.hash.replace(/^#/, "");
+      log("modules.load(newModule=" + newModule + "): hash='" + hash + "'");
+      if (!newModule)
+        newModule = hash;
+      if (!newModule)
+        newModule = "main";
+      if (modules.current === newModule) {
+        log("modules.load: skip loading '" + newModule + "'", "color:gray;");
+        return;
+      }
+      log("modules.load: loading '" + newModule + "'");
+      modules.current = newModule;
+      modules[newModule]();
+      window.location.replace("#" + newModule);
+    }
+  }
+
+  modules.dbConnect = function () {
+    document.getElementById("mainContent").outerHTML =
+      '<div id="mainContent" style="text-align:center;">' +
+      '<form action="javascript:void(0);" onsubmit="return modules.dbConnect.onSubmit(this);">' +
+      '<label for="dbConnectURL">URL:</label>' +
+      '<input type="text" id="dbConnectURL"' +
+      ' pattern="https://github[.]com/[a-zA-Z0-9_.\\-]+/[a-zA-Z0-9_.\\-]+"' +
+      ' title="GitHub is supported only" required/>' + '<br>' +
+      '<label for="dbConnectToken">Token:</label>' +
+      '<input type="password" id="dbConnectToken" required/>' + '<br>' +
+      '<button type="submit">Connect</button>' +
+      '</form>' +
+      '</div>';
+  }
+
+  modules.dbConnect.onSubmit = function (form) {
+    log("modules.dbConnect.onSubmit(form=" + form + ")");
+    var dbConnectURL = document.getElementById("dbConnectURL");
+    var dbConnectToken = document.getElementById("dbConnectToken");
+    if (!dbConnectURL.value || !dbConnectToken.value)
+      return false;
+    var dbConnectOpts = {
+      url: dbConnectURL.value,
+      token: dbConnectToken.value
+    };
+    gh.init(dbConnectOpts);
+    if (window.localStorage)
+      window.localStorage.setItem("db-connect", JSON.stringify(dbConnectOpts));
+    modules.load("main");
+    return true;
+  }
+
+  var gh = {
+    init: function (dbConnectOpts) {
+      var m = dbConnectOpts.url.match("(https://)(github[.]com)/([a-zA-Z0-9_.\\-]+)/([a-zA-Z0-9_.\\-]+)");
+      if (!m || m.length !== 5)
+        throw new Error("Invalid GitHub URL: '" + dbConnectOpts.url + "'");;
+      this.apiBaseUrl = m[1] + "api." + m[2]; // + "/api/v3"
+      this.user = m[3];
+      this.repo = m[4];
+      this.token = dbConnectOpts.token;
+    },
+    connect: function () {
+      this.xhr = new XMLHttpRequest();
+      this.xhr.open("GET", gh.apiBaseUrl + "/repos/" + gh.user + "/" + gh.repo, true);
+      this.xhr.setRequestHeader("Accept", "application/vnd.github+json");
+      this.xhr.setRequestHeader("X-GitHub-Api-Version", "2022-11-28");
+      this.xhr.setRequestHeader("Authorization", "token " + gh.token);
+      xhr.onreadystatechange = function (arg) {
+        log("modules.main: xhr.onreadystatechange(readyState=" + this.readyState + ")");
+        if (this.readyState != 4)
+          return;
+        log("modules.main: xhr.onreadystatechange: " + this.status,
+                     this.status >= 400 ? "color:red;" : this.status >= 300 ? "color:chocolate;" : "color:green;");
+        log("modules.main: xhr.onreadystatechange: headers:\n" + this.getAllResponseHeaders(), "color:gray;");
+        log("modules.main: xhr.onreadystatechange: response:\n" + this.responseText, "color:dimgray;");
+        document.getElementById("repoStatus").innerHTML = "default_branch = '" + JSON.parse(this.responseText)["default_branch"] + "'";
+      }
+      xhr.send();
+    }
+  };
+
+  modules.main = function () {
+    document.getElementById("mainContent").outerHTML =
+      '<div id="mainContent">' +
+      '<div id="repoStatus"></div>' +
+      '</div>';
+    log("modules.main():");
+  }
+
+  window.onhashchange = function () {
+    log("window.onhashchange: hash='" + window.location.hash + "'");
+    modules.load();
+  }
+
+  if (document.addEventListener)
+    document.addEventListener("DOMContentLoaded", init);
+
+  window.onload = init;
+</script>
+</head>
+<body>
+<div id="mainContent"></div>
+<pre id="logBar"><noscript style="color:red;">Please enable Javascript in your browser</noscript></pre>
+</body>
+</html>
