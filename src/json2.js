@@ -158,13 +158,17 @@ if (typeof JSON !== "object") {
     JSON = {};
 }
 
+if (typeof JSON2 !== "object") {
+    JSON2 = {};
+}
+
 (function () {
     "use strict";
 
     var rx_one = /^[\],:{}\s]*$/;
-    var rx_two = /\\(?:["\\\/bfnrt]|u[0-9a-fA-F]{4})/g;
-    var rx_three = /"[^"\\\n\r]*"|true|false|null|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?/g;
-    var rx_four = /(?:^|:|,)(?:\s*\[)+/g;
+    var rx_two = /\\(["\\\/bfnrt]|u[0-9a-fA-F]{4})/g;
+    var rx_three = /"[^"\\\n\r]*"|true|false|null|-?\d+(\.\d*)?([eE][+\-]?\d+)?/g;
+    var rx_four = /(^|:|,)(\s*\[)+/g;
     var rx_escapable = /[\\"\u0000-\u001f\u007f-\u009f\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g;
     var rx_dangerous = /[\u0000\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g;
 
@@ -204,6 +208,17 @@ if (typeof JSON !== "object") {
         Boolean.prototype.toJSON = this_value;
         Number.prototype.toJSON = this_value;
         String.prototype.toJSON = this_value;
+    }
+
+    var isArray;
+    if (Object.prototype.toString.apply([]) === "[object Array]") {
+        isArray = function (value) {
+            return Object.prototype.toString.apply(value) === "[object Array]";
+        };
+    } else {
+        isArray = function (value) {
+            return typeof value.length === "number";
+        };
     }
 
     var gap;
@@ -302,7 +317,7 @@ if (typeof JSON !== "object") {
 
 // Is the value an array?
 
-            if (Object.prototype.toString.apply(value) === "[object Array]") {
+            if (isArray(value)) {
 
 // The value is an array. Stringify every element. Use null as a placeholder
 // for non-JSON values.
@@ -381,7 +396,7 @@ if (typeof JSON !== "object") {
 
 // If the JSON object does not yet have a stringify method, give it one.
 
-    if (typeof JSON.stringify !== "function") {
+    if (typeof JSON2.stringify !== "function") {
         meta = {    // table of character substitutions
             "\b": "\\b",
             "\t": "\\t",
@@ -391,7 +406,7 @@ if (typeof JSON !== "object") {
             "\"": "\\\"",
             "\\": "\\\\"
         };
-        JSON.stringify = function (value, replacer, space) {
+        JSON2.stringify = function (value, replacer, space) {
 
 // The stringify method takes a value and an optional replacer, and an optional
 // space parameter, and returns a JSON text. The replacer can be a function
@@ -425,7 +440,7 @@ if (typeof JSON !== "object") {
                 typeof replacer !== "object"
                 || typeof replacer.length !== "number"
             )) {
-                throw new Error("JSON.stringify");
+                throwException(new Error("JSON2.stringify"));
             }
 
 // Make a fake root object containing our value under the key of "".
@@ -433,13 +448,16 @@ if (typeof JSON !== "object") {
 
             return str("", {"": value});
         };
+        if (typeof JSON.stringify !== "function") {
+            JSON.stringify = JSON2.stringify;
+        }
     }
 
 
 // If the JSON object does not yet have a parse method, give it one.
 
-    if (typeof JSON.parse !== "function") {
-        JSON.parse = function (text, reviver) {
+    if (typeof JSON2.parse !== "function") {
+        JSON2.parse = function (text, reviver) {
 
 // The parse method takes a text and an optional reviver function, and returns
 // a JavaScript value if the text is a valid JSON text.
@@ -524,7 +542,10 @@ if (typeof JSON !== "object") {
 
 // If the text is not JSON parseable, then a SyntaxError is thrown.
 
-            throw new SyntaxError("JSON.parse");
+            throwException(new SyntaxError("JSON2.parse"));
         };
+        if (typeof JSON.parse !== "function") {
+            JSON.parse = JSON2.parse;
+        }
     }
 }());

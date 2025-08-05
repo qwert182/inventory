@@ -20,13 +20,13 @@
 
   // From "JavaScript: The Definitive Guide, 5th Edition"
   if (!Function.prototype.apply) {
-    Function.prototype.apply = function(object, parameters) {
+    Function.prototype.apply = function (object, parameters) {
       var f = this;
       var o = object || window;
       var args = parameters || [];
       o._$_apply_$_ = f;
       var stringArgs = [];
-      for(var i = 0; i < args.length; i++)
+      for (var i = 0; i < args.length; i++)
         stringArgs[i] = "args[" + i + "]";
       var arglist = stringArgs.join(",");
       var methodcall = "o._$_apply_$_(" + arglist + ");";
@@ -37,7 +37,7 @@
   }
 
   if (!Function.prototype.call) {
-    Function.prototype.call = function(object) {
+    Function.prototype.call = function (object) {
       var f = this;
       var o = object || window;
       o._$_call_$_ = f;
@@ -53,17 +53,49 @@
   }
 
   if (!Object.prototype.hasOwnProperty) {
-    Object.prototype.hasOwnProperty = function(property) {
+    Object.prototype.hasOwnProperty = function (property) {
       return true;
     };
   }
 
   if (!Array.prototype.push) {
-    Array.prototype.push = function(element) {
+    Array.prototype.push = function (element) {
       var a = this;
       var l = a.length;
       a[l] = element;
       return l + 1;
+    };
+  }
+
+  if ("a".replace("a", function (c) { return "b"; }) != "b") {
+    var string_replace = String.prototype.replace;
+    String.prototype.replace = function (r, f) {
+      var s = this;
+      if (typeof f != "function")
+        return string_replace.call(s, r, f);
+      var s1 = string_replace.call(s, r, "@");
+      var s2 = string_replace.call(s, r, "?");
+      var res = "";
+      var from = 0, to = 0;
+      for (var i = 0; i < s1.length; ++i) {
+        if (s1.charAt(i) == s2.charAt(i)) {
+          ++to;
+        } else {
+          res += s.substring(from, to);
+          if (typeof r == "string") {
+            res += f(s.substring(to, to + r.length));
+            to += r.length;
+          } else {
+            var m = s.substring(to).match(r);
+            res += f(m[0]);
+            to += m[0].length;
+          }
+          from = to;
+        }
+      }
+      if (from != to)
+        res += s.substring(from, to);
+      return res;
     };
   }
 
@@ -107,10 +139,7 @@
   }
 
   function init() {
-    log("init()", init.done ? "color:gray;" : "");
-    if (init.done)
-      return;
-    init.done = true;
+    log("init()");
     var o = JSON.parse('[{"key1": "value1", "key2": "value2"}, {}]');
     log("init: JSON.parse -> " + o);
     o = {a:1, b:"value", "2":"x"};
@@ -147,17 +176,21 @@
     }});*/
   }
 
-  window.onload = init;
+  window.onload = function () {
+    if (init.done)
+      return;
+    init.done = true;
+    init();
+  };
 
   if (document.addEventListener)
-    document.addEventListener("DOMContentLoaded", init, false);
+    document.addEventListener("DOMContentLoaded", window.onload, false);
 
   // Error handling
 
-  var tryCatch;
-  var throwException;
-  var asyncOnErrorAction = null;
-  var asyncOnErrorException = null;
+  var tryCatch, tryFinally, throwException;
+  var asyncErrorHandler = null;
+  var asyncException = null;
 
   function asyncInitErrorHanding() {
     if (typeof Error == "undefined") {
@@ -170,43 +203,77 @@
     }
     if (typeof SyntaxError == "undefined")
       SyntaxError = Error;
-    asyncOnErrorAction = {
-      errorFunc: function () {
+    asyncErrorHandler = {
+      catchFunc: function () {
         log("asyncInitErrorHanding: use async error handling via window.onerror");
         tryCatch = tryCatchAsync;
+        tryFinally = tryFinallyAsync;
         throwException = throwExceptionAsync;
-      }
+      },
+      prev: null
     };
     eval("tryCatch = function (arg) {\n" +
+         "  if (!arg.catchFunc) throw new Error(\"No catchFunc provided for tryCatch()\");\n" +
          "  try {\n" +
          "    arg.tryFunc();\n" +
          "  } catch (e) {\n" +
-         "    if (arg.catchFunc) arg.catchFunc(e);\n" +
+         "    arg.catchFunc(e);\n" +
          "  } finally {\n" +
          "    if (arg.finallyFunc) arg.finallyFunc();\n" +
          "  }\n" +
          "  if (arg.okFunc) arg.okFunc();\n" +
          "};\n" +
-         "throwException = function (e) { throw e; };");
-    asyncOnErrorAction = null;
+         "tryFinally = function (arg) {\n" +
+         "  if (!arg.finallyFunc) throw new Error(\"No finallyFunc provided for tryFinally()\");\n" +
+         "  try {\n" +
+         "    arg.tryFunc();\n" +
+         "  } finally {\n" +
+         "    arg.finallyFunc();\n" +
+         "  }\n" +
+         "  if (arg.okFunc) arg.okFunc();\n" +
+         "};\n" +
+         "throwException = function (e) {\n" +
+         "  throw e;\n" +
+         "};\n");
+    asyncErrorHandler = null;
     log("asyncInitErrorHanding: use native error handling");
   }
 
-  function tryCatchAsync() {
-    if (asyncOnErrorAction) {
-      log("tryCatchAsync: asyncOnErrorAction != null, but = '" + asyncOnErrorAction.toString() + "'", "color:red;");
-      throwException(new Error("tryCatchAsync: TODO: implement stack"));
-    }
+  function tryCatchAsync(arg) {
+    if (!arg.catchFunc)
+      throwException(new Error("tryCatchAsync: No catchFunc provided for tryCatch()"));
+    var prevHandler = asyncErrorHandler;
+    asyncErrorHandler = {
+      catchFunc: arg.catchFunc,
+      finallyFunc: arg.finallyFunc,
+      okFunc: arg.okFunc,
+      prev: prevHandler
+    };
+    arg.tryFunc();
+    asyncErrorHandler = asyncErrorHandler.prev;
+    if (arg.finallyFunc) arg.finallyFunc();
+    if (arg.okFunc) arg.okFunc();
+  }
+
+  function tryFinallyAsync(arg) {
+    if (!arg.finallyFunc)
+      throwException(new Error("tryFinallyAsync: No finallyFunc provided for tryFinally()"));
+    var prevHandler = asyncErrorHandler;
+    asyncErrorHandler = {
+      finallyFunc: arg.finallyFunc,
+      okFunc: arg.okFunc,
+      prev: prevHandler
+    };
+    arg.tryFunc();
+    asyncErrorHandler = asyncErrorHandler.prev;
+    if (arg.finallyFunc) arg.finallyFunc();
+    if (arg.okFunc) arg.okFunc();
   }
 
   function throwExceptionAsync(e) {
     log("throwExceptionAsync('" + e + "')");
-    if (asyncOnErrorException) {
-      log("throwExceptionAsync: asyncOnErrorException != null, but = '" + asyncOnErrorException.toString() + "'", "color:red;");
-      asyncOnErrorAction = null;
-    }
-    asyncOnErrorException = e;
-    eval("throw asyncOnErrorException;");
+    asyncException = e;
+    eval("throw asyncException;");
   }
 
   window.onerror = function (message, source, lineno, colno, error) {
@@ -221,12 +288,18 @@
     }
     if (error && error.stack)
       str += "\n" + error.stack;
-    log("window.onerror: " + str, asyncOnErrorAction ? "color:orange;" : "color:red;");
-    if (asyncOnErrorAction) {
-      var action = asyncOnErrorAction;
-      asyncOnErrorAction = null;
-      action.errorFunc();
-      return true;
+    log("window.onerror: " + str, asyncErrorHandler ? "color:orange;" : "color:red;");
+    while (asyncErrorHandler) {
+      var action = asyncErrorHandler;
+      var actionCatchFunc = asyncErrorHandler.catchFunc;
+      asyncErrorHandler.catchFunc = null;
+      if (actionCatchFunc) actionCatchFunc(asyncException);
+      asyncErrorHandler = action.prev;
+      if (action.finallyFunc) action.finallyFunc();
+      if (actionCatchFunc) {
+        if (action.okFunc) action.okFunc();
+        return true;
+      }
     }
   };
 
