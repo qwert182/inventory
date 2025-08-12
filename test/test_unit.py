@@ -11,9 +11,11 @@ def get_unit_tests():
     l.append(pytest.param("src/" + filepath[5:-3] + ".htm", id=filepath[5:-3]))
   return l
 
-@pytest.mark.parametrize("test_url", get_unit_tests())
-def test_unit(test_url, subtests, selenium, base_url):
-  selenium.get(urljoin(base_url, test_url))
+def test_unit(subtests, selenium, base_url):
   wait = WebDriverWait(selenium, 30)
-  wait.until(EC.visibility_of_element_located((By.ID, "logBar")))
-  wait.until(EC.title_contains("Test PASSED"));
+  for test in get_unit_tests():
+    test_url, = test.values
+    with subtests.test(test.id):
+      selenium.get(urljoin(base_url, test_url))
+      wait.until(EC.visibility_of_element_located((By.ID, "logBar")))
+      wait.until(EC.title_contains("Test PASSED"));
