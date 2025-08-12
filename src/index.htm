@@ -52,12 +52,6 @@
     };
   }
 
-  if (!Object.prototype.hasOwnProperty) {
-    Object.prototype.hasOwnProperty = function (property) {
-      return true;
-    };
-  }
-
   if (!Array.prototype.push) {
     Array.prototype.push = function (element) {
       var a = this;
@@ -117,63 +111,41 @@
     }
   }
 
-  /*if (typeof XMLHttpRequest == "undefined") {
+  if (typeof XMLHttpRequest == "undefined") {
     XMLHttpRequest = function () {
       var msXMLs = ["Msxml2.XMLHTTP.6.0", "Msxml2.XMLHTTP.3.0", "Msxml2.XMLHTTP", "Microsoft.XMLHTTP"];
       for (var i = 0; i < msXMLs.length; ++i) {
-        log("XMLHttpRequest: creating '" + msXMLs[i] + "'");
-        var xhr = new ActiveXObject(msXMLs[i]);
-        log("XMLHttpRequest: -> " + typeof xhr);
-        if (xhr)
+        var xhr = null;
+        try {
+          xhr = new ActiveXObject(msXMLs[i]);
+        } catch (e) { }
+        if (xhr) {
+          log("XMLHttpRequest: using '" + msXMLs[i] + "'");
+          XMLHttpRequest = new Function("return new ActiveXObject('" + msXMLs[i] + "');");
           return xhr;
+        }
       }
-      log("XMLHttpRequest: Cannot create XHR" + xhr, "color:red;");
+      log("XMLHttpRequest: Cannot create XHR", "color:red;");
       return null;
-    }
-  }*/
-
-  function asyncInitXMLHttpRequest(arg) {
-    if (typeof XMLHttpRequest != "undefined") {
-      
-    }
+    };
   }
 
   function init() {
-    log("init()");
-    var o = JSON.parse('[{"key1": "value1", "key2": "value2"}, {}]');
-    log("init: JSON.parse -> " + o);
-    o = {a:1, b:"value", "2":"x"};
-    for (var i in o) {
-      log("i = " + typeof i + ": " + i + " -> " + o[i]);
+    var dbConnectOpts = null;
+    try {
+      if (window.localStorage)
+        dbConnectOpts = window.localStorage.getItem("db-connect");
+    } catch (e) {
     }
-    tryCatch({
-      tryFunc: function () {
-        log("tryFunc");
-        document.xxxxxxxx();
-      }, catchFunc: function (e) {
-        log("catchFunc(" + e + ")");
-      }, finallyFunc: function () {
-        log("finallyFunc");
-      }, okFunc: function () {
-        log("okFunc");
+    if (dbConnectOpts) {
+      dbConnectOpts = JSON.parse(dbConnectOpts);
+      log("init: dbConnectOpts = '" + dbConnectOpts + "'", "color:red;");
+      if (!gh.init(dbConnectOpts)) {
+        modules.load();
+        return;
       }
-    });
-    log("o.length = " + o.length);
-    var j = JSON.stringify([{"1":"2 123"}, false, true, null, {}, "hello", []]);
-    log("init: JSON.stringify -> " + j);
-    /*asyncInitXMLHttpRequest({nextInit: function () {
-      var xhr = new XMLHttpRequest();
-      var dbConnectOpts = window.localStorage ? window.localStorage.getItem("db-connect") : null;
-      if (dbConnectOpts) {
-        dbConnectOpts = JSON.parse(dbConnectOpts);
-        log("init: dbConnectOpts = '" + dbConnectOpts + "'", "color:red;");
-        if (!gh.init(dbConnectOpts)) {
-          modules.load();
-          return;
-        }
-      }
-      modules.load("dbConnect");
-    }});*/
+    }
+    modules.load("dbConnect");
   }
 
   window.onload = function () {
@@ -188,94 +160,6 @@
 
   // Error handling
 
-  var tryCatch, tryFinally, throwException;
-  var asyncErrorHandler = null;
-  var asyncException = null;
-
-  function asyncInitErrorHanding() {
-    if (typeof Error == "undefined") {
-      Error = function (message) {
-        this.message = message;
-      };
-      Error.prototype.toString = function () {
-        return "Error: " + this.message;
-      };
-    }
-    if (typeof SyntaxError == "undefined")
-      SyntaxError = Error;
-    asyncErrorHandler = {
-      catchFunc: function () {
-        log("asyncInitErrorHanding: use async error handling via window.onerror");
-        tryCatch = tryCatchAsync;
-        tryFinally = tryFinallyAsync;
-        throwException = throwExceptionAsync;
-      },
-      prev: null
-    };
-    eval("tryCatch = function (arg) {\n" +
-         "  if (!arg.catchFunc) throw new Error(\"No catchFunc provided for tryCatch()\");\n" +
-         "  try {\n" +
-         "    arg.tryFunc();\n" +
-         "  } catch (e) {\n" +
-         "    arg.catchFunc(e);\n" +
-         "  } finally {\n" +
-         "    if (arg.finallyFunc) arg.finallyFunc();\n" +
-         "  }\n" +
-         "  if (arg.okFunc) arg.okFunc();\n" +
-         "};\n" +
-         "tryFinally = function (arg) {\n" +
-         "  if (!arg.finallyFunc) throw new Error(\"No finallyFunc provided for tryFinally()\");\n" +
-         "  try {\n" +
-         "    arg.tryFunc();\n" +
-         "  } finally {\n" +
-         "    arg.finallyFunc();\n" +
-         "  }\n" +
-         "  if (arg.okFunc) arg.okFunc();\n" +
-         "};\n" +
-         "throwException = function (e) {\n" +
-         "  throw e;\n" +
-         "};\n");
-    asyncErrorHandler = null;
-    log("asyncInitErrorHanding: use native error handling");
-  }
-
-  function tryCatchAsync(arg) {
-    if (!arg.catchFunc)
-      throwException(new Error("tryCatchAsync: No catchFunc provided for tryCatch()"));
-    var prevHandler = asyncErrorHandler;
-    asyncErrorHandler = {
-      catchFunc: arg.catchFunc,
-      finallyFunc: arg.finallyFunc,
-      okFunc: arg.okFunc,
-      prev: prevHandler
-    };
-    arg.tryFunc();
-    asyncErrorHandler = asyncErrorHandler.prev;
-    if (arg.finallyFunc) arg.finallyFunc();
-    if (arg.okFunc) arg.okFunc();
-  }
-
-  function tryFinallyAsync(arg) {
-    if (!arg.finallyFunc)
-      throwException(new Error("tryFinallyAsync: No finallyFunc provided for tryFinally()"));
-    var prevHandler = asyncErrorHandler;
-    asyncErrorHandler = {
-      finallyFunc: arg.finallyFunc,
-      okFunc: arg.okFunc,
-      prev: prevHandler
-    };
-    arg.tryFunc();
-    asyncErrorHandler = asyncErrorHandler.prev;
-    if (arg.finallyFunc) arg.finallyFunc();
-    if (arg.okFunc) arg.okFunc();
-  }
-
-  function throwExceptionAsync(e) {
-    log("throwExceptionAsync('" + e + "')");
-    asyncException = e;
-    eval("throw asyncException;");
-  }
-
   window.onerror = function (message, source, lineno, colno, error) {
     var str = message;
     if (source) {
@@ -287,20 +171,8 @@
       str += ")";
     }
     if (error && error.stack)
-      str += "\n" + error.stack;
-    log("window.onerror: " + str, asyncErrorHandler ? "color:orange;" : "color:red;");
-    while (asyncErrorHandler) {
-      var action = asyncErrorHandler;
-      var actionCatchFunc = asyncErrorHandler.catchFunc;
-      asyncErrorHandler.catchFunc = null;
-      if (actionCatchFunc) actionCatchFunc(asyncException);
-      asyncErrorHandler = action.prev;
-      if (action.finallyFunc) action.finallyFunc();
-      if (actionCatchFunc) {
-        if (action.okFunc) action.okFunc();
-        return true;
-      }
-    }
+      str += ("\n" + error.stack).replace(/\n$/, "").replace(/\n/g, "\n  ");
+    log("window.onerror: " + str, "color:red;");
   };
 
   // Single-page application modules (TODO: rename to subpages? forms?)
@@ -323,7 +195,7 @@
       if (hash != newModule)
         window.location.replace("#" + newModule);
     }
-  }
+  };
 
   modules.dbConnect = function () {
     $("mainContent").innerHTML =
@@ -336,7 +208,7 @@
         '<input type="password" id="dbConnectToken" required/>' + '<br>' +
         '<button type="submit">Connect</button>' +
       '</form>';
-  }
+  };
 
   modules.dbConnect.urlPattern = "(https:\\/\\/)(github[.]com)\\/([a-zA-Z0-9_.\\-]+)\\/([a-zA-Z0-9_.\\-]+)";
 
@@ -362,9 +234,10 @@
       window.localStorage.setItem("db-connect", JSON.stringify(dbConnectOpts));
     modules.load("main");
     return true;
-  }
+  };
 
   var gh = {
+    connected: false,
     init: function (dbConnectOpts) {
       var m = dbConnectOpts.url.match(modules.dbConnect.urlPattern);
       if (!m || m.length !== 5)
@@ -375,29 +248,34 @@
       this.token = dbConnectOpts.token;
     },
     connect: function () {
-      this.xhr = new XMLHttpRequest();
-      this.xhr.open("GET", gh.apiBaseUrl + "/repos/" + gh.user + "/" + gh.repo, true);
-      this.xhr.setRequestHeader("Accept", "application/vnd.github+json");
-      this.xhr.setRequestHeader("X-GitHub-Api-Version", "2022-11-28");
-      this.xhr.setRequestHeader("Authorization", "token " + gh.token);
-      this.xhr.onreadystatechange = function (arg) {
-        log("modules.main: xhr.onreadystatechange(readyState=" + this.readyState + ")");
-        if (this.readyState != 4)
+      var xhr = new XMLHttpRequest();
+      xhr.open("GET", gh.apiBaseUrl + "/repos/" + gh.user + "/" + gh.repo, true);
+      xhr.setRequestHeader("Accept", "application/vnd.github+json");
+      xhr.setRequestHeader("X-GitHub-Api-Version", "2022-11-28");
+      xhr.setRequestHeader("Authorization", "token " + gh.token);
+      xhr.setRequestHeader("If-None-Match", "\"no-cache-" + Math.random() + "\"");
+      xhr.setRequestHeader("If-Modified-Since", "Sat, 01 Jan 2000 00:00:00 GMT");
+      xhr.onreadystatechange = function () {
+        log("modules.main: xhr.onreadystatechange(): readyState=" + xhr.readyState);
+        if (xhr.readyState != 4)
           return;
-        log("modules.main: xhr.onreadystatechange: " + this.status,
-                     this.status >= 400 ? "color:orangered;" : this.status >= 300 ? "color:orange;" : "color:green;");
-        log("modules.main: xhr.onreadystatechange: headers:\n" + this.getAllResponseHeaders(), "color:gray;");
-        log("modules.main: xhr.onreadystatechange: response:\n" + this.responseText, "color:dimgray;");
-        $("repoStatus").innerHTML = "default_branch = '" + JSON.parse(this.responseText)["default_branch"] + "'";
-      }
-      this.xhr.send();
+        log("modules.main: xhr.onreadystatechange: " + xhr.status,
+                     xhr.status >= 400 || xhr.status < 100 ? "color:orangered;" : xhr.status >= 300 ? "color:orange;" : "color:green;");
+        if (xhr.status < 100 || xhr.status >= 600)
+          return;
+        log("modules.main: xhr.onreadystatechange: headers:\n" + xhr.getAllResponseHeaders(), "color:gray;");
+        log("modules.main: xhr.onreadystatechange: response:\n" + xhr.responseText, "color:dimgray;");
+        gh.default_branch = JSON.parse(xhr.responseText)["default_branch"];
+        gh.connected = true;
+      };
+      xhr.send();
     }
   };
 
   modules.main = function () {
     $("mainContent").innerHTML =
       '<div id="main">' +
-        '<table border="1" cellpadding="1" cellspacing="2" id="main">' +
+        '<table border="1" cellpadding="1" cellspacing="2">' +
           '<thead>' +
             '<th>1</th>' + '<th>2</th>' +
           '</thead>' +
@@ -407,14 +285,13 @@
         '</table>' +
       '</div>';
     log("modules.main():");
-  }
+    gh.connect();
+  };
 
   window.onhashchange = function () {
     log("window.onhashchange: hash='" + window.location.hash + "'");
     modules.load();
-  }
-
-  asyncInitErrorHanding();
+  };
 //--></script>
 <script type="text/javascript" src="json2.js"></script>
 </head>

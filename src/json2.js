@@ -368,7 +368,9 @@ if (typeof JSON2 !== "object") {
 // Otherwise, iterate through all of the keys in the object.
 
                 for (k in value) {
-                    if (Object.prototype.hasOwnProperty.call(value, k)) {
+                    if (!Object.prototype.hasOwnProperty ||
+                        Object.prototype.hasOwnProperty.call(value, k)
+                    ) {
                         v = str(k, value);
                         if (v) {
                             partial.push(quote(k) + (

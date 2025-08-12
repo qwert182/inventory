@@ -3,6 +3,7 @@ from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, HTTPServer
 from time import sleep
 import os, sys
+import json
 
 opts = {
   "insert-timeout-element": False,
@@ -81,14 +82,37 @@ class RequestHandler(SimpleHTTPRequestHandler):
         self.wfile.write(helper_data)
         self.wfile.write(b"\n")
         self.wfile.write(unit_test_data)
+        self.wfile.write(b"  function pass() {\n" +
+                         b"    log('Test PASSED', 'color:green;');\n" +
+                         b"    document.title = 'Test PASSED';\n" +
+                         b"  }\n")
         self.wfile.write(b"  function init() {\n" +
-                         b"    document.title = \"Testing...\";\n" +
-                         b"    test();\n" +
-                         b"    log(\"Test PASSED\", \"color:green;\");\n" +
-                         b"    document.title = \"Test PASSED\";\n" +
+                         b"    document.title = 'Testing...';\n" +
+                         b"    if (test() !== 'async_test')\n" +
+                         b"      pass();\n" +
                          b"  }\n\n")
         self.wfile.write(b"  function _init() {")
         self.wfile.write(index_data[init_func_pos+19:])
+      return
+
+    if self.path.startswith("/api.gh/"):
+      for h in self.headers:
+        print(f"{h}: {self.headers[h]}", file=sys.stderr)
+      self.send_response(HTTPStatus.OK)
+      self.send_header("Content-type", "application/json; charset=utf-8")
+      self.send_header("Cache-control", "private, max-age=60, s-maxage=60")
+      self.send_header("x-github-media-type", "github.v3; format=json")
+      self.end_headers()
+      response = {
+        "id": 0,
+        "name": "repo",
+        "full_name": "example/repo",
+        "owner": { "login": "example", "id": 0 },
+        "html_url": "/gh/example/repo",
+        "url": "/api.gh/repos/example/repo",
+        "default_branch": "main",
+      }
+      self.wfile.write(json.dumps(response, indent=2).encode())
       return
 
     super().do_GET()
