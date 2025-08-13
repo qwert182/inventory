@@ -1,0 +1,43 @@
+name: Tests
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Python for testing
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.8
+      - name: Install dependencies
+        run: |
+          npm install phantomjs-prebuilt &
+          python3 -m pip install -r test/requirements-python3.8-phantomjs.txt &
+          wait
+      - name: Run tests
+        run: |
+          set -x
+          PATH=$PWD/node_modules/phantomjs-prebuilt/bin:$PATH
+          export OPENSSL_CONF=/etc/ssl # https://forums.gentoo.org/viewtopic-p-8793806.html
+          python3 --version
+          phantomjs --version
+          test/server.py --host=127.0.0.1 --port=8080 &
+          trap 'kill -TERM %1' EXIT
+          while ! bash -c "sleep 1; echo -n '' </dev/tcp/127.0.0.1/8080"; do :; done
+          cd test && python3 \
+            -W "ignore:Support for PhantomJS has been deprecated and will be removed in a future release. If running headless is a requirement, please consider using Firefox or Chrome instead.:DeprecationWarning" \
+            -W "ignore:Selenium support for PhantomJS has been deprecated, please use headless versions of Chrome or Firefox instead:UserWarning" \
+            -m pytest --driver phantomjs --junit-xml=../tests.junit.xml
+      - name: Test report
+        uses: mikepenz/action-junit-report@v5
+        with:
+          report_paths: '**/*.junit.xml'

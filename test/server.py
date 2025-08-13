@@ -8,11 +8,19 @@ import json
 opts = {
   "insert-timeout-element": False,
   "print-user-agent": False,
+  "host": "",
+  "port": 8080,
 }
 
 for arg in sys.argv[1:]:
-  if arg.startswith("--") and arg[2:] in opts:
-    opts[arg[2:]] = True
+  if arg.startswith("--"):
+    if "=" in arg and arg[2:arg.index("=")] in opts:
+      opts[arg[2:arg.index("=")]] = type(opts[arg[2:arg.index("=")]])(arg[arg.index("=")+1:])
+      continue
+    elif arg[2:] in opts:
+      opts[arg[2:]] = True
+      continue
+  print("WARNING: ignored option: " + arg, file=sys.stderr)
 
 class RequestHandler(SimpleHTTPRequestHandler):
   timeouts = {
@@ -118,7 +126,7 @@ class RequestHandler(SimpleHTTPRequestHandler):
     super().do_GET()
 
 if __name__ == "__main__":
-  with HTTPServer(("", 8080), RequestHandler) as server:
+  with HTTPServer((opts["host"], opts["port"]), RequestHandler) as server:
     host, port = server.socket.getsockname()[:2]
     url_host = f"[{host}]" if ":" in host else host
     print(f"Serving HTTP on {host} port {port} "
